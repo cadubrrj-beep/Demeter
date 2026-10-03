@@ -134,6 +134,12 @@ def calcular_ranking(df: pd.DataFrame) -> pd.DataFrame:
     df = df[df["liq2meses"] >= MIN_LIQUIDEZ]
     df = df[(df["evebit"] > 0) & (df["roic"] > 0)]
 
+    # P/VP negativo = patrimônio líquido negativo (empresa endividada além
+    # do que possui). Earnings Yield e ROIC ficam distorcidos nesses casos
+    # (ex.: BHIA3), então é mais seguro excluir.
+    if "pvp" in df.columns:
+        df = df[df["pvp"] > 0]
+
     # Uma classe por empresa (PETR3 e PETR4): fica a mais líquida.
     df = df.sort_values("liq2meses", ascending=False).drop_duplicates("base")
 
@@ -153,9 +159,16 @@ def calcular_ranking(df: pd.DataFrame) -> pd.DataFrame:
 # ------------------------------------------------------------------------ saída
 def montar_saida(df: pd.DataFrame) -> pd.DataFrame:
     cotacao = next((c for c in df.columns if c.startswith("cota")), None)
+
+    # Apenas informativo - não entra no score. Valor em R$ pago em
+    # dividendos por ação nos últimos 12 meses (mesma janela do Div.Yield).
+    if cotacao and "divyield" in df.columns:
+        df["div_por_acao"] = (df[cotacao] * df["divyield"] / 100).round(2)
+
     desejadas = [
         "posicao", "papel", cotacao, "earnings_yield", "roic",
-        "pl", "pvp", "divyield", "liq2meses", "rank_ey", "rank_roic", "score",
+        "pl", "pvp", "divyield", "div_por_acao",
+        "liq2meses", "rank_ey", "rank_roic", "score",
     ]
     colunas = [c for c in desejadas if c and c in df.columns]
     saida = df[colunas].copy()
